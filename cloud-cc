@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+'''
+Read clang CC1 driver command, tweak to preprocess input, and send direct the cloud CC1 to 
+compile the preprocessed file
+'''
+
+import argparse
+import sys
+import subprocess
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-resource-dir')
+parser.add_argument('-masm-verbose', action='store_true')
+parser.add_argument('-dwarf-column-info', action='store_true')
+parser.add_argument('-fmessage-length')
+parser.add_argument('-fstack-check', action='store_true')
+parser.add_argument('-mdarwin-stkchk-strong-link', action='store_true')
+parser.add_argument('-fdiagnostics-show-option', action='store_true')
+parser.add_argument('-isysroot')
+parser.add_argument('-I')
+parser.add_argument('-o', '--output')
+parser.add_argument('-E', action='store_true')
+parser.add_argument('-internal-isystem')
+parser.add_argument('-cxx-isystem')
+parser.add_argument('-c-isystem')
+parser.add_argument('-internal-externc-isystem')
+parser.add_argument('-fdebug-compilation-dir')
+parser.add_argument('-x')
+
+# Preprocess the input
+preprocess_args = ['clang'] + sys.argv[1:] + ['-E', '-o', '-']
+preprocess = subprocess.Popen(preprocess_args, stdout=subprocess.PIPE)
+
+parsed, kept_args = parser.parse_known_args()
+# TODO: be more comprehensive (e.g., support foo.ll)
+language = 'cpp-output' if parsed.x == 'c' else 'c++-cpp-output'
+
+# Pass output of the preprocessing process to the compiling process
+clang_args = kept_args[:-1] + ['-x',  language]
+compile_args = ['cloud_compile.py', '-', '-clang='+' '.join(clang_args), '-o', parsed.output]
+subprocess.call(compile_args, stdin=preprocess.stdout)
