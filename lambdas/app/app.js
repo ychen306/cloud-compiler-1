@@ -120,7 +120,7 @@ app.post('/split', async (req, res, next) => {
 
     // push to s3 bucket
     await Promise.all(
-      params.map(param => s3.upload(param).promise())
+      params.map(param => S3.upload(param).promise())
     );
   } catch(error) {
     console.error("Error uploading split files to s3 bucket: ", error);

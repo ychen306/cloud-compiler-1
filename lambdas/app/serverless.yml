@@ -60,7 +60,7 @@ provider:
 
 functions:
   compile:
-    image: 914213759135.dkr.ecr.us-east-2.amazonaws.com/cloud-compiler-lambda@sha256:27ede3e34916780e5c2dfbb5cebfd4d8ac884253364babe4c11fadf2e144c25d
+    image: 914213759135.dkr.ecr.us-east-2.amazonaws.com/cloud-compiler-lambda@sha256:41e043098e78ec7b6e8d298955dbfc10cff2a5a50dfd773cb469386cf9bd885b
     command:
       - app.handler
     events:
