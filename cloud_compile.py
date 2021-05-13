@@ -47,7 +47,7 @@ async def split(output_path, input_path, compressed, chunks):
                         sys.stdout.buffer.write(s3_keys)
                         sys.stdout.flush()
                     else:
-                        with open(output_path, 'wb') as fd:
+                        with open(output_path, 'w') as fd:
                             fd.write(s3_keys)
                 else:
                     print(resp)
