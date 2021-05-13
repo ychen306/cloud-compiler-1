@@ -6,7 +6,7 @@ import sys, getopt, glob, os, json, base64, tempfile
 import zlib
 import argparse
 
-base_lambda_url = "https://qc2tkcatk8.execute-api.us-east-2.amazonaws.com/dev/"
+base_lambda_url = "https://i3jv6iay77.execute-api.us-east-2.amazonaws.com/dev/"
 lambda_split_url = base_lambda_url + "split/" 
 lambda_compile_url = base_lambda_url + "compile/"
 
@@ -27,46 +27,43 @@ async def split(output_path, input_path, compressed, chunks):
 
     data = base64.b64encode(data).decode('utf8')
 
-    payload = json.dumps({
+    payload = {
         'compressed': compressed,
         'data': data,
         'chunks': chunks
-    })
+    }
 
-    with tempfile.TemporaryFile() as temp_file:
-        temp_file.write(payload) # write json to tmp file
-        temp_file.seek(0) # go to start of file
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(lambda_split_url,
+                        json=payload) as resp:
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(lambda_split_url,
-                            data=temp_file) as resp:
+                if resp.status == 200:
+                    s3_keys = json.loads(await resp.text())
+                    s3_keys = "\n".join(s3_keys) # join keys with new line
 
-                    if resp.status == 200:
-                        s3_keys = list(await resp.text())
-                        s3_keys = "\n".join(s3_keys) # join keys with new line
 
-                        if output_path == '-':
-                            sys.stdout.buffer.write(s3_keys)
-                            sys.stdout.flush()
-                        else:
-                            with open(output_path, 'wb') as fd:
-                                fd.write(s3_keys)
+                    if output_path == '-':
+                        sys.stdout.buffer.write(s3_keys)
+                        sys.stdout.flush()
                     else:
-                        print(resp)
-                        # first load top level response
-                        json_resp = json.loads(await resp.text())
-                        if 'message' in json_resp: # check for error messages from AWS
-                            print("Lambda message: " + json_resp['message'], file=sys.stderr)
-                            raise Exception("Failed execution: " + json_resp['message'])
+                        with open(output_path, 'wb') as fd:
+                            fd.write(s3_keys)
+                else:
+                    print(resp)
+                    # first load top level response
+                    json_resp = json.loads(await resp.text())
+                    if 'message' in json_resp: # check for error messages from AWS
+                        print("Lambda message: " + json_resp['message'], file=sys.stderr)
+                        raise Exception("Failed execution: " + json_resp['message'])
 
-                        # load second level body
-                        body = json.loads(json_resp['body'])
-                        print('Splitter Error: ' + str(body), file=sys.stderr)
+                    # load second level body
+                    body = json.loads(json_resp['body'])
+                    print('Splitter Error: ' + str(body), file=sys.stderr)
 
-                        raise Exception("Failed to split file")
-        except Exception as e:
-            print("Unable to split {} due to {}".format(input_path, e.__class__), file=sys.stderr)
+                    raise Exception("Failed to split file")
+    except Exception as e:
+        print("Unable to split {} due to {}".format(input_path, e.__class__), file=sys.stderr)
 
 
 async def compile(output_path, input_path, clang_cmd):

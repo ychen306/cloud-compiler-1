@@ -7,19 +7,9 @@ const sls = require('serverless-http');
 const AWS = require('aws-sdk');
 const app = express();
 
+app.use(express.json());
+
 const S3 = new AWS.S3();
-
-// function to exclude certain routes from using middleware
-// use as so: app.use(unless(middlewareName, "/user/login", "/user/register",...));
-const unless = (middleware, ...paths) => {
-	return function(req, res, next) {
-		const pathCheck = paths.some(path => path === req.path);
-		return pathCheck ? next() : middleware(req, res, next);
-	};
-};
-
-// do not json parse for /split
-app.use(unless(express.json(), '/split'));
 
 // allows for async/await implementation of streams
 const streamToFile = (input_stream, file_path) => {
@@ -80,15 +70,15 @@ app.get('/compile', async (req, res, next) => {
 
 // split input into multiple files
 app.post('/split', async (req, res, next) => {
-  var data, chunks;
+  var data = Buffer.from(req.body.data, 'base64');
+  var chunks = req.body.chunks;
+  var compressed = req.body.compressed;
 
   // write input file to disk
   try {
-    await streamToFile(req, '/tmp/upload');
-    const json_upload = JSON.parse(fs.readFileSync('/tmp/upload'));
-    data = Buffer.from(json_upload.data, 'base64');
-    chunks = json_upload.chunks;
-
+    if(compressed) {
+      data = zlib.inflateSync(data);
+    }
     fs.writeFileSync('/tmp/in', data);
   } catch(error) {
     console.error("Error writing data to lambda disk: ", error);
@@ -132,6 +122,7 @@ app.post('/split', async (req, res, next) => {
         Body: fs.readFileSync(`/tmp/${temp_dir}/` + file)
       };
       params.push(param);
+      s3_keys.push(s3_file_key);
     });
 
     // push to s3 bucket

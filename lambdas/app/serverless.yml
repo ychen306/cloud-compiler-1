@@ -60,7 +60,7 @@ provider:
 
 functions:
   compile:
-    image: 914213759135.dkr.ecr.us-east-2.amazonaws.com/cloud-compiler-lambda@sha256:6e4e5a8da8986ce29b06b6fcd738ab3fcdbba4f651d7a4c0608ba1cb159442f6
+    image: 914213759135.dkr.ecr.us-east-2.amazonaws.com/cloud-compiler-lambda@sha256:140924b5025ec19fe567da7077998bf16163e5c5d46ae193cbb72f113d0c3363
     events:
         - http:
             path: / 
@@ -77,6 +77,7 @@ functions:
           Action:
             - s3:GetObject
             - s3:PutObject
+            - s3:DeleteObject
           Resource: arn:aws:s3:::cloudcompilerbucket/*
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
