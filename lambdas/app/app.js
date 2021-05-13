@@ -7,9 +7,19 @@ const sls = require('serverless-http');
 const AWS = require('aws-sdk');
 const app = express();
 
-app.use(express.json());
-
 const S3 = new AWS.S3();
+
+// function to exclude certain routes from using middleware
+// use as so: app.use(unless(middlewareName, "/user/login", "/user/register",...));
+const unless = (middleware, ...paths) => {
+	return function(req, res, next) {
+		const pathCheck = paths.some(path => path === req.path);
+		return pathCheck ? next() : middleware(req, res, next);
+	};
+};
+
+// do not json parse for /split
+app.use(unless(express.json(), '/split'));
 
 // allows for async/await implementation of streams
 const streamToFile = (input_stream, file_path) => {
@@ -70,11 +80,15 @@ app.get('/compile', async (req, res, next) => {
 
 // split input into multiple files
 app.post('/split', async (req, res, next) => {
-  const chunks = req.body.chunks;
-  const data = Buffer.from(req.body.data, 'base64');
+  var data, chunks;
 
   // write input file to disk
   try {
+    await streamToFile(req, '/tmp/upload');
+    const json_upload = JSON.parse(fs.readFileSync('/tmp/upload'));
+    data = Buffer.from(json_upload.data, 'base64');
+    chunks = json_upload.chunks;
+
     fs.writeFileSync('/tmp/in', data);
   } catch(error) {
     console.error("Error writing data to lambda disk: ", error);
@@ -85,10 +99,12 @@ app.post('/split', async (req, res, next) => {
     next();
   }
 
-  // split files and output to /tmp/split/
+  // split files and output to /tmp/(temp_dir name)/
+  var temp_dir = uuid.v4();
   try {
-    fs.mkdirSync('/tmp/split/');
-    child_process.execSync(`llvm-split-12 -j${chunks} /tmp/in -o /tmp/split/`);
+    fs.mkdirSync(`/tmp/${temp_dir}/`);
+    
+    child_process.execSync(`llvm-split-12 -j${chunks} /tmp/in -o /tmp/${temp_dir}/`);
   } catch(error) {
     console.error("Error splitting files: ", error);
     res.status(500).json({
@@ -106,14 +122,14 @@ app.post('/split', async (req, res, next) => {
   try {
     var params = [];
 
-    const files = fs.readdirSync('/tmp/split/'); // read split files
+    const files = fs.readdirSync(`/tmp/${temp_dir}/`); // read split files
     // generate params for each file
     files.forEach(file => {
       var s3_file_key = uuid.v4();
       var param = {
         Bucket: 'cloudcompilerbucket',
         Key: s3_file_key,
-        Body: fs.readFileSync('/tmp/split/' + file)
+        Body: fs.readFileSync(`/tmp/${temp_dir}/` + file)
       };
       params.push(param);
     });

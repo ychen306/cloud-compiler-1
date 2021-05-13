@@ -60,9 +60,7 @@ provider:
 
 functions:
   compile:
-    image: 914213759135.dkr.ecr.us-east-2.amazonaws.com/cloud-compiler-lambda@sha256:41e043098e78ec7b6e8d298955dbfc10cff2a5a50dfd773cb469386cf9bd885b
-    command:
-      - app.handler
+    image: 914213759135.dkr.ecr.us-east-2.amazonaws.com/cloud-compiler-lambda@sha256:6e4e5a8da8986ce29b06b6fcd738ab3fcdbba4f651d7a4c0608ba1cb159442f6
     events:
         - http:
             path: / 
@@ -79,7 +77,7 @@ functions:
           Action:
             - s3:GetObject
             - s3:PutObject
-          Resource: arn:aws:s3:::cloud_compiler_bucket/*
+          Resource: arn:aws:s3:::cloudcompilerbucket/*
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
 #    Check the event documentation for details
