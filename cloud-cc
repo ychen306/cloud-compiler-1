@@ -47,7 +47,7 @@ frontend = subprocess.Popen(compile_args, stdout=subprocess.PIPE)
 
 print("Finished Frontend & Splitting")
 
-with tempfile.TemporaryDirectory() as tmpdir, tempfile.NamedTemporaryFile() as tmpf:
+with tempfile.TemporaryDirectory() as tmpdir:
     # Pass output of the preprocessing process to the compiling process
     opt_args = kept_args[:-1] + ['-x', 'ir', '-emit-obj']
     compile_args = ['cloud_compile.py', '-', f'-clang={" ".join(opt_args)}', '-o', tmpdir]

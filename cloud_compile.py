@@ -111,6 +111,7 @@ async def main(output_path, input_path, compressed, clang_cmd, to_split, chunks)
             with open(input_path, 'r') as f:
                 s3_keys = f.read()
 
+        s3_keys = s3_keys.split('\n')
         await asyncio.gather(*(compile(output_path, s3_key, clang_cmd) for s3_key in s3_keys))
 
     print("Finished requests to lambda.", file=sys.stdout)
