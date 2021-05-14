@@ -7,6 +7,8 @@ compile the preprocessed file
 import argparse
 import sys
 import subprocess
+import tempfile
+import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-resource-dir')
@@ -17,6 +19,7 @@ parser.add_argument('-fstack-check', action='store_true')
 parser.add_argument('-mdarwin-stkchk-strong-link', action='store_true')
 parser.add_argument('-fdiagnostics-show-option', action='store_true')
 parser.add_argument('-isysroot')
+parser.add_argument('-emit-obj', action='store_true')
 parser.add_argument('-I')
 parser.add_argument('-o', '--output')
 parser.add_argument('-E', action='store_true')
@@ -35,7 +38,27 @@ parsed, kept_args = parser.parse_known_args()
 # TODO: be more comprehensive (e.g., support foo.ll)
 language = 'cpp-output' if parsed.x == 'c' else 'c++-cpp-output'
 
-# Pass output of the preprocessing process to the compiling process
-clang_args = kept_args[:-1] + ['-x',  language]
-compile_args = ['cloud_compile.py', '-', '-clang='+' '.join(clang_args), '-o', parsed.output]
-subprocess.call(compile_args, stdin=preprocess.stdout)
+chunks = 4 # Number of chunks to split file into
+
+# run the lambda to call frontend and get raw bitcode, then split
+frontend_args = kept_args[:-1] + ['-emit-llvm-bc', '-disable-llvm-passes', '-x',  language]
+compile_args = ['cloud_compile.py', '-compress', f'-chunks={chunks}', '-split', '-', f'-clang={" ".join(frontend_args)}', '-o', '-']
+frontend = subprocess.Popen(compile_args, stdout=subprocess.PIPE)
+
+print("Finished Frontend & Splitting")
+
+with tempfile.TemporaryDirectory() as tmpdir, tempfile.NamedTemporaryFile() as tmpf:
+    # Pass output of the preprocessing process to the compiling process
+    opt_args = kept_args[:-1] + ['-x', 'ir', '-emit-obj']
+    compile_args = ['cloud_compile.py', '-', f'-clang={" ".join(opt_args)}', '-o', tmpdir]
+    subprocess.call(compile_args, stdin=frontend.stdout)
+
+    print('Finished Backend Compiling')
+
+    # link the result
+    link_args = ['ld', '-r']
+    link_args.extend(f'{file}.o' for file in os.listdir(tmpdir))
+    link_args.extend(['-o', parsed.output])
+    subprocess.call(link_args)
+
+    print('Linked Chunks')

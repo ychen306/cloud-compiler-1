@@ -70,16 +70,19 @@ app.get('/compile', async (req, res, next) => {
 
 // split input into multiple files
 app.post('/split', async (req, res, next) => {
-  var data = Buffer.from(req.body.data, 'base64');
-  var chunks = req.body.chunks;
-  var compressed = req.body.compressed;
+  var data = req.body.data;
+  const chunks = req.body.chunks;
+  const compressed = req.body.compressed;
+  const clang_cmd = req.body.clang_cmd;
 
-  // write input file to disk
+  // write uploaded file to disk
   try {
     if(compressed) {
       data = zlib.inflateSync(data);
     }
-    fs.writeFileSync('/tmp/in', data);
+
+    fs.writeFileSync('/tmp/upload', data);
+    child_process.execSync(`clang-12 ${clang_cmd} /tmp/upload -o /tmp/in`)
   } catch(error) {
     console.error("Error writing data to lambda disk: ", error);
     res.status(500).json({

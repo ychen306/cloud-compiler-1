@@ -2,7 +2,7 @@
 
 import asyncio
 import aiohttp
-import sys, getopt, glob, os, json, base64, tempfile
+import sys, os, json, base64, uuid
 import zlib
 import argparse
 
@@ -11,12 +11,12 @@ lambda_split_url = base_lambda_url + "split/"
 lambda_compile_url = base_lambda_url + "compile/"
 
 
-async def split(output_path, input_path, compressed, chunks):
+async def split(output_path, input_path, compressed, chunks, clang_cmd):
 
     if input_path == '-':
         data = sys.stdin.buffer.read()
     else:
-        with open(input_path, 'rb') as f:
+        with open(input_path, 'r') as f:
           data = f.read()
 
     if not data:
@@ -25,12 +25,11 @@ async def split(output_path, input_path, compressed, chunks):
     if compressed:
         data = zlib.compress(data)
 
-    data = base64.b64encode(data).decode('utf8')
-
     payload = {
         'compressed': compressed,
         'data': data,
-        'chunks': chunks
+        'chunks': chunks,
+        'clang_cmd': clang_cmd
     }
 
     try:
@@ -50,7 +49,6 @@ async def split(output_path, input_path, compressed, chunks):
                         with open(output_path, 'w') as fd:
                             fd.write(s3_keys)
                 else:
-                    print(resp)
                     # first load top level response
                     json_resp = json.loads(await resp.text())
                     if 'message' in json_resp: # check for error messages from AWS
@@ -66,14 +64,7 @@ async def split(output_path, input_path, compressed, chunks):
         print("Unable to split {} due to {}".format(input_path, e.__class__), file=sys.stderr)
 
 
-async def compile(output_path, input_path, clang_cmd):
-
-    if input_path == '-':
-        s3_key = sys.stdin.buffer.read()
-    else:
-        with open(input_path, 'rb') as f:
-            s3_key = f.read()
-
+async def compile(output_path, s3_key, clang_cmd):
     params = {
         's3_key': s3_key,
         'clang_cmd': clang_cmd,
@@ -91,7 +82,7 @@ async def compile(output_path, input_path, clang_cmd):
                         sys.stdout.buffer.write(base64.b64decode(output))
                         sys.stdout.flush()
                     else:
-                        with open(output_path, 'wb') as fd:
+                        with open(os.path.join(output_path, str(uuid.uuid4().hex) + '.o'), 'wb') as fd:
                             fd.write(base64.b64decode(output))
                 else:
                     # first load top level response
@@ -112,9 +103,15 @@ async def compile(output_path, input_path, clang_cmd):
 async def main(output_path, input_path, compressed, clang_cmd, to_split, chunks):
 
     if to_split:
-        await split(output_path, input_path, compressed, chunks)
+        await split(output_path, input_path, compressed, chunks, clang_cmd)
     else:
-        await compile(output_path, input_path, clang_cmd)
+        if input_path == '-':
+            s3_keys = sys.stdin.buffer.read()
+        else:
+            with open(input_path, 'r') as f:
+                s3_keys = f.read()
+
+        await asyncio.gather(*(compile(output_path, s3_key, clang_cmd) for s3_key in s3_keys))
 
     print("Finished requests to lambda.", file=sys.stdout)
 
@@ -142,6 +139,10 @@ def checkParams():
 
     if not (os.path.isfile(input_path) or input_path == '-'):
         print("Specify a valid file or use stdin (-)", file=sys.stderr)
+        sys.exit(2)
+
+    if not args.to_split and output_path != "-" and not os.path.isdir(output_path):
+        print("Please specify a valid directory to output compiled files to.")
         sys.exit(2)
 
     return output_path, input_path, compressed, clang_cmd, to_split, chunks
