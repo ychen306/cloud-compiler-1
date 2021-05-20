@@ -2,11 +2,11 @@
 
 import asyncio
 import aiohttp
-import sys, os, json, base64, uuid
+import sys, os, base64, uuid
 import zlib
 import argparse
 
-base_lambda_url = "https://i3jv6iay77.execute-api.us-east-2.amazonaws.com/dev/"
+base_lambda_url = "https://z88e24e0a9.execute-api.us-east-2.amazonaws.com/dev/"
 lambda_split_url = base_lambda_url + "split/" 
 lambda_compile_url = base_lambda_url + "compile/"
 
@@ -37,10 +37,13 @@ async def split(output_path, input_path, compressed, chunks, clang_cmd):
             async with session.post(lambda_split_url,
                         json=payload) as resp:
 
+                body = await resp.json()
                 if resp.status == 200:
-                    s3_keys = json.loads(await resp.text())
+                    s3_keys = body['s3_keys']
                     s3_keys = "\n".join(s3_keys) # join keys with new line
 
+                    print("Splitter Stdout: ", body['stdout'])
+                    print("Splitter Stderr: ", body['stderr'])
 
                     if output_path == '-':
                         sys.stdout.buffer.write(s3_keys)
@@ -48,16 +51,17 @@ async def split(output_path, input_path, compressed, chunks, clang_cmd):
                     else:
                         with open(output_path, 'w') as fd:
                             fd.write(s3_keys)
+
+                    # exit with same status code as splitter
+                    # sys.exit(body['status'])
+
                 else:
-                    # first load top level response
-                    json_resp = json.loads(await resp.text())
-                    if 'message' in json_resp: # check for error messages from AWS
-                        print("Lambda message: " + json_resp['message'], file=sys.stderr)
-                        raise Exception("Failed execution: " + json_resp['message'])
+                    if 'message' in body: # check for error messages from AWS
+                        print("Lambda message: " + body['message'], file=sys.stderr)
+                        raise Exception("Failed execution: " + body['message'])
 
                     # load second level body
-                    body = json.loads(json_resp['body'])
-                    print('Splitter Error: ' + str(body), file=sys.stderr)
+                    print('Splitter Error: ', str(body), file=sys.stderr)
 
                     raise Exception("Failed to split file")
     except Exception as e:
@@ -75,26 +79,29 @@ async def compile(output_path, s3_key, clang_cmd):
             async with session.get(lambda_compile_url,
                         params=params) as resp:
 
+                body = await resp.json()
                 if resp.status == 200:
-                    output = await resp.text()
+
+                    print("Compiler Stdout: ", body['stdout'])
+                    print("Compiler Stderr: ", body['stderr'])
 
                     if output_path == '-':
-                        sys.stdout.buffer.write(base64.b64decode(output))
+                        sys.stdout.buffer.write(base64.b64decode(body['data']))
                         sys.stdout.flush()
                     else:
                         with open(os.path.join(output_path, str(uuid.uuid4().hex) + '.o'), 'wb') as fd:
-                            fd.write(base64.b64decode(output))
-                else:
-                    # first load top level response
-                    json_resp = json.loads(await resp.text())
-                    if 'message' in json_resp: # check for error messages from AWS
-                        print("Lambda message: " + json_resp['message'], file=sys.stderr)
-                        raise Exception("Failed execution: " + json_resp['message'])
+                            fd.write(base64.b64decode(body['data']))
 
-                    # load second level body
-                    body = json.loads(json_resp['body'])
+                    # exit with same status code as splitter
+                    # sys.exit(body['status'])
+
+                else:
+                    if 'message' in body: # check for error messages from AWS
+                        print("Lambda message: " + body['message'], file=sys.stderr)
+                        raise Exception("Failed execution: " + body['message'])
+
                     print('Compiler Error: ' + str(body), file=sys.stderr)
-                    raise Exception("Failed to split file")
+                    raise Exception("Failed to compile file")
 
     except Exception as e:
         print("Unable to get compiled file {} due to {}.".format(s3_key, e.__class__), file=sys.stderr)
@@ -142,7 +149,7 @@ def checkParams():
         print("Specify a valid file or use stdin (-)", file=sys.stderr)
         sys.exit(2)
 
-    if not args.to_split and output_path != "-" and not os.path.isdir(output_path):
+    if not to_split and output_path != "-" and not os.path.isdir(output_path):
         print("Please specify a valid directory to output compiled files to.")
         sys.exit(2)
 

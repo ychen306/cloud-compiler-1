@@ -47,10 +47,12 @@ app.get('/compile', async (req, res, next) => {
   }
 
   // run clang on split file and write object file to disk
-  var response_data;
+  var compile_result;
+
   try {
-    response_data = Buffer.from(child_process.execSync(`clang-12 ${clang_cmd} /tmp/in -o -`));
-    response_data = response_data.toString('base64');
+    var args = clang_cmd.split(' ');
+    args.push('/tmp/in', '-o', '-');
+    compile_result = child_process.spawnSync('clang-12', args);
   } catch(error) {
     const execution_error = {
       'type': 'compiler',
@@ -65,7 +67,20 @@ app.get('/compile', async (req, res, next) => {
   }
 
   // send base64 encoded object file back to user
-  res.status(200).send(response_data);
+  res.status(200).json({
+    'data': Buffer.from(compile_result.stdout).toString('base64'),
+    'stderr': compile_result.stderr,
+    'status': compile_result.status
+  });
+
+  // remove file from S3 after it has been compiled and sent back to user
+  S3.deleteObject(params, (err, data) => {
+    if(err) {
+      console.error(err, err.stack);
+    } else {
+      console.log(data);
+    }
+  });
 });
 
 // split input into multiple files
@@ -94,10 +109,11 @@ app.post('/split', async (req, res, next) => {
 
   // split files and output to /tmp/(temp_dir name)/
   var temp_dir = uuid.v4();
+  var split_result;
   try {
     fs.mkdirSync(`/tmp/${temp_dir}/`);
     
-    child_process.execSync(`llvm-split-12 -j${chunks} /tmp/in -o /tmp/${temp_dir}/`);
+    split_result = child_process.spawnSync('llvm-split-12', [`-j${chunks}`, '/tmp/in', '-o', `/tmp/${temp_dir}/`]);
   } catch(error) {
     console.error("Error splitting files: ", error);
     res.status(500).json({
@@ -142,7 +158,12 @@ app.post('/split', async (req, res, next) => {
   }
 
   // send keys for each split file back to user
-  res.status(200).send(s3_keys);
+  res.status(200).json({
+    's3_keys': s3_keys,
+    'stdout': split_result.stdout,
+    'stderr': split_result.stderr,
+    'status': split_result.status
+  });
 });
 
 module.exports.handler = sls(app);
