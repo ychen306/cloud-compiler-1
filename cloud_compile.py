@@ -5,26 +5,21 @@ import aiohttp
 import sys, os, base64, uuid
 import zlib
 import argparse
+import requests
 
 base_lambda_url = "https://z88e24e0a9.execute-api.us-east-2.amazonaws.com/dev/"
 lambda_split_url = base_lambda_url + "split/" 
 lambda_compile_url = base_lambda_url + "compile/"
 
+def log(*args):
+    print(*args, file=sys.stderr)
 
-async def split(output_path, input_path, compressed, chunks, clang_cmd):
 
-    if input_path == '-':
-        data = sys.stdin.buffer.read()
-    else:
-        with open(input_path, 'rb') as f:
-          data = f.read()
-
-    if not data:
-        return
-
+def split(data, clang_cmd, chunks=1, compressed=True):
     if compressed:
-        data = zlib.compress(data)
+        data = zlib.compress(data, 9)
     
+    log(len(data))
     data = base64.b64encode(data).decode('utf8')
 
     payload = {
@@ -34,35 +29,17 @@ async def split(output_path, input_path, compressed, chunks, clang_cmd):
         'clang_cmd': clang_cmd
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(lambda_split_url,
-                    json=payload) as resp:
-
-            body = await resp.json()
-            if resp.status == 200:
-                s3_keys = body['s3_keys']
-                s3_keys = "\n".join(s3_keys) # join keys with new line
-                s3_keys += "\n"
-
-                print("Splitter Stdout: ", body['stdout'])
-                print("Splitter Stderr: ", body['stderr'])
-
-                if output_path == '-':
-                    sys.stdout.write(s3_keys)
-                    sys.stdout.flush()
-                else:
-                    with open(output_path, 'w') as fd:
-                        fd.write(s3_keys)
-
-                # exit with same status code as splitter
-                # sys.exit(body['status'])
-
-            else:
-                if 'message' in body: # check for error messages from AWS
-                    print("Lambda message: " + body['message'], file=sys.stderr)
-
-                # load second level body
-                print('Splitter Error: ', str(body), file=sys.stderr)
+    resp = requests.post(lambda_split_url, json=payload)
+    if resp.status_code != 200:
+      log('!!! error spliting', resp.text)
+    body = resp.json()
+    if resp.status_code == 200:
+        return body['s3_keys']
+    else:
+        if 'message' in body: # check for error messages from AWS
+            log("Lambda message: " + body['message'])
+        # load second level body
+        log('Splitter Error: ', str(body))
 
 
 async def compile(output_path, s3_key, clang_cmd):
@@ -82,8 +59,8 @@ async def compile(output_path, s3_key, clang_cmd):
             if resp.status == 200:
 
                 if 'stderr' in body:
-                    print("Compiler Stderr: ", body['stderr'])
-                    print("Compiler Status: ", body['status'])
+                    log("Compiler Stderr: ", body['stderr'])
+                    log("Compiler Status: ", body['status'])
 
                 if output_path == '-':
                     sys.stdout.buffer.write(base64.b64decode(body['data']))
@@ -97,9 +74,9 @@ async def compile(output_path, s3_key, clang_cmd):
 
             else:
                 if 'message' in body: # check for error messages from AWS
-                    print("Lambda message: " + body['message'], file=sys.stderr)
+                    log("Lambda message: " + body['message'])
 
-                print('Compiler Error: ' + str(body), file=sys.stderr)
+                log('Compiler Error: ' + str(body))
 
 async def main(output_path, input_path, compressed, clang_cmd, to_split, chunks):
 
@@ -109,7 +86,7 @@ async def main(output_path, input_path, compressed, clang_cmd, to_split, chunks)
         # in this case, input_path = s3_key
         await compile(output_path, input_path, clang_cmd)
 
-    print("Finished requests to lambda.")
+    log("Finished requests to lambda.")
 
 def checkParams():
     parser = argparse.ArgumentParser()
@@ -130,11 +107,11 @@ def checkParams():
         input_path = args.file
         output_path = args.output
     except Exception as e:
-        print("Error parsing arguments: {}.".format(e.__class__), file=sys.stderr)
+        log("Error parsing arguments: {}.".format(e.__class__))
         sys.exit(2)
         
     if to_split and (not (os.path.isfile(input_path) or input_path == '-')):
-        print("Specify a valid file or use stdin (-)", file=sys.stderr)
+        log("Specify a valid file or use stdin (-)")
         sys.exit(2)
 
     return output_path, input_path, compressed, clang_cmd, to_split, chunks
