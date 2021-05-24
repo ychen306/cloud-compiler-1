@@ -23,9 +23,9 @@ const streamToFile = (input_stream, file_path) => {
 };
 
 // compile split files
-app.get('/compile', async (req, res, next) => {
-  const s3_key = req.query.s3_key;
-  const clang_cmd = req.query.clang_cmd;
+app.post('/compile', async (req, res, next) => {
+  const s3_key = req.body.s3_key;
+  const clang_cmd = req.body.clang_cmd;
 
   // params to fetch file from s3 bucket
   const params = {
@@ -69,7 +69,7 @@ app.get('/compile', async (req, res, next) => {
   // send base64 encoded object file back to user
   res.status(200).json({
     'data': Buffer.from(compile_result.stdout).toString('base64'),
-    'stderr': compile_result.stderr,
+    'stderr': compile_result.stderr.toString(),
     'status': compile_result.status
   });
 
@@ -85,7 +85,7 @@ app.get('/compile', async (req, res, next) => {
 
 // split input into multiple files
 app.post('/split', async (req, res, next) => {
-  var data = req.body.data;
+  var data = Buffer.from(req.body.data, 'base64');
   const chunks = req.body.chunks;
   const compressed = req.body.compressed;
   const clang_cmd = req.body.clang_cmd;

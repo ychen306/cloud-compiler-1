@@ -44,15 +44,18 @@ chunks = 4 # Number of chunks to split file into
 # run the lambda to call frontend and get raw bitcode, then split
 frontend_args = kept_args[:-1] + ['-emit-llvm-bc', '-disable-llvm-passes', '-x',  language]
 
-compile_args = ['./cloud_compile.py', f'-chunks={chunks}', '-split', '-', f'-clang={" ".join(frontend_args)}', '-o', '-']
+
+compile_args = ['./cloud_compile.py', f'-chunks={chunks}', '-split', '-', f'-clang=\"{" ".join(frontend_args)}\"', '-o', '-']
 frontend = subprocess.Popen(compile_args, stdin=preprocess.stdout, stdout=subprocess.PIPE)
 
 print("Finished Frontend & Splitting")
 
-with tempfile.TemporaryDirectory() as tmpdir:
+ # This needs repeated for each object ID outputtted from frontend 
+with tempfile.TemporaryDirectory() as tmpdir, tempfile.NamedTemporaryFile() as tmpf:
     # Pass output of the preprocessing process to the compiling process
     opt_args = kept_args[:-1] + ['-x', 'ir', '-emit-obj']
-    compile_args = ['cloud_compile.py', '-', f'-clang={" ".join(opt_args)}', '-o', tmpdir]
+    compile_args = ['cloud_compile.py', '-', f'-clang=\"{" ".join(opt_args)}\"', '-o', tmpf]
+
     subprocess.call(compile_args, stdin=frontend.stdout)
 
     print('Finished Backend Compiling')
