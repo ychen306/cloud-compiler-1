@@ -32,18 +32,10 @@ parser.add_argument('-fdebug-compilation-dir')
 parser.add_argument('-x')
 
 # Preprocess the input
-# preprocess_args = ['clang'] + sys.argv[1:] + ['-E', '-o', '-']
-# preprocess = subprocess.Popen(preprocess_args, stdout=subprocess.PIPE)
+preprocess_args = ['clang'] + sys.argv[1:] + ['-E', '-o', '-']
+preprocess = subprocess.Popen(preprocess_args, stdout=subprocess.PIPE)
 
-command = ""
-for line in sys.stdin:
-    if 'q' == line.rstrip():
-        break
-    command += line
-
-command = command.split()
-
-parsed, kept_args = parser.parse_known_args(command)
+parsed, kept_args = parser.parse_known_args()
 # TODO: be more comprehensive (e.g., support foo.ll)
 language = 'cpp-output' if parsed.x == 'c' else 'c++-cpp-output'
 
@@ -52,10 +44,8 @@ chunks = 4 # Number of chunks to split file into
 # run the lambda to call frontend and get raw bitcode, then split
 frontend_args = kept_args[:-1] + ['-emit-llvm-bc', '-disable-llvm-passes', '-x',  language]
 
-print(" ".join(frontend_args[1:]))
-sys.exit()
-compile_args = ['./cloud_compile.py', '-compress', f'-chunks={chunks}', '-split', '-', f'-clang={" ".join(frontend_args)}', '-o', '-']
-frontend = subprocess.Popen(compile_args, stdout=subprocess.PIPE)
+compile_args = ['./cloud_compile.py', f'-chunks={chunks}', '-split', '-', f'-clang={" ".join(frontend_args)}', '-o', '-']
+frontend = subprocess.Popen(compile_args, stdin=preprocess.stdout, stdout=subprocess.PIPE)
 
 print("Finished Frontend & Splitting")
 
