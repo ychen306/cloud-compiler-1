@@ -26,12 +26,12 @@ frameworkVersion: '2'
 provider:
   name: aws
   lambdaHashingVersion: 20201221
-  profile: cloud-compiler
-  region: us-east-2
+  profile: cloud-compile
+  region: us-east-1
   ecr:
     # In this section you can define images that will be built locally and uploaded to ECR
     images:
-      cloud-compiler-image:
+      cloud-compile-image:
         path: ./
 
 # you can overwrite defaults here
@@ -60,7 +60,7 @@ provider:
 
 functions:
   compile:
-    image: 914213759135.dkr.ecr.us-east-2.amazonaws.com/cloud-compiler-lambda@sha256:08edbeb7d2a36ce9c44a4df9d05ef69c88f101f94756e5646942b56c45312f6e
+    image: 011533361443.dkr.ecr.us-east-1.amazonaws.com/cloud-compile@sha256:8ed2b4dde2b66dac84b0372c02bf84ee82a09cd2de6be9c5bd0632da70fdf330
     events:
         - http:
             path: / 
@@ -78,7 +78,7 @@ functions:
             - s3:GetObject
             - s3:PutObject
             - s3:DeleteObject
-          Resource: arn:aws:s3:::cloudcompilerbucket/*
+          Resource: arn:aws:s3:::cloud-compile/*
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
 #    Check the event documentation for details

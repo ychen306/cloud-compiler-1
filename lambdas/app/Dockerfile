@@ -17,7 +17,7 @@ RUN apt-get update && \
     libcurl4-openssl-dev 
 
 # Copy function code
-COPY app.js package.json ${FUNCTION_DIR}/ 
+COPY package.json ${FUNCTION_DIR}/ 
 
 WORKDIR ${FUNCTION_DIR}
 
@@ -26,18 +26,7 @@ WORKDIR ${FUNCTION_DIR}
 
 RUN npm install
 
-# Grab a fresh slim copy of the image to reduce the final size
-FROM node:12-buster-slim
-
-# Include global arg in this stage of the build
-ARG FUNCTION_DIR
-
-# Set working directory to function root directory
-WORKDIR ${FUNCTION_DIR}
-
-# Copy in the built dependencies
-COPY --from=build-image ${FUNCTION_DIR} ${FUNCTION_DIR}
-
+# Install LLVM
 RUN apt-get update && \
     apt-get install -y \
     apt-utils \
@@ -49,6 +38,17 @@ RUN apt-get update && \
     chmod +x llvm.sh && \
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
     ./llvm.sh 12 
+
+# Install the custom splitter
+RUN apt-get install -y cmake
+ADD ./split/CMakeLists.txt ./split/split.cpp /split/
+RUN mkdir split-build && \
+      cd split-build && \
+      cmake /split -DCMAKE_INSTALL_PREFIX=/usr/bin -DCMAKE_BUILD_TYPE=Release && \
+      make install
+
+# Copy function code (do this last so that caching works better)
+COPY app.js ${FUNCTION_DIR}
 
 ENTRYPOINT ["/usr/local/bin/npx", "aws-lambda-ric"]
 CMD ["app.handler"]

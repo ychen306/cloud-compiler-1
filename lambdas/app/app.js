@@ -29,7 +29,7 @@ app.post('/compile', async (req, res, next) => {
 
   // params to fetch file from s3 bucket
   const params = {
-    Bucket: 'cloudcompilerbucket',
+    Bucket: 'cloud-compile',
     Key: s3_key,
   };
 
@@ -113,7 +113,7 @@ app.post('/split', async (req, res, next) => {
   try {
     fs.mkdirSync(`/tmp/${temp_dir}/`);
     
-    split_result = child_process.spawnSync('llvm-split-12', [`-j${chunks}`, '/tmp/in', '-o', `/tmp/${temp_dir}/`]);
+    split_result = child_process.spawnSync('split', [`-j${chunks}`, '/tmp/in', '-o', `/tmp/${temp_dir}/`]);
   } catch(error) {
     console.error("Error splitting files: ", error);
     res.status(500).json({
@@ -136,7 +136,7 @@ app.post('/split', async (req, res, next) => {
     files.forEach(file => {
       var s3_file_key = uuid.v4();
       var param = {
-        Bucket: 'cloudcompilerbucket',
+        Bucket: 'cloud-compile',
         Key: s3_file_key,
         Body: fs.readFileSync(`/tmp/${temp_dir}/` + file)
       };
@@ -152,6 +152,7 @@ app.post('/split', async (req, res, next) => {
     console.error("Error uploading split files to s3 bucket: ", error);
     res.status(500).json({
       'type': 's3_write',
+      'extra': JSON.stringify(error),
       'message': "Error uploading split files to s3 bucket."
     });
     next();

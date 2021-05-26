@@ -7,7 +7,7 @@ import zlib
 import argparse
 import requests
 
-base_lambda_url = "https://z88e24e0a9.execute-api.us-east-2.amazonaws.com/dev/"
+base_lambda_url = "https://mwqk8dbp1f.execute-api.us-east-1.amazonaws.com/dev/"
 lambda_split_url = base_lambda_url + "split/" 
 lambda_compile_url = base_lambda_url + "compile/"
 
@@ -33,6 +33,7 @@ def split(data, clang_cmd, chunks=1, compressed=True):
     if resp.status_code != 200:
       log('!!! error spliting', resp.text)
     body = resp.json()
+    print(body)
     if resp.status_code == 200:
         return body['s3_keys']
     else:
