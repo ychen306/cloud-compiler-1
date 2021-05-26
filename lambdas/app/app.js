@@ -37,9 +37,8 @@ app.get('/upload', async (req, res, next) => {
     res.status(500).json({
       'message': 'Error getting presigned put-obj url' + JSON.stringify(error)
     });
+    next();
   }
-
-  next();
 });
 
 // compile split files
@@ -71,7 +70,7 @@ app.post('/compile', async (req, res, next) => {
 
   try {
     var args = clang_cmd.split(' ');
-    args.push('/tmp/in', '-o', '-');
+    args.push('/tmp/in', '-o', '/tmp/out');
     compile_result = child_process.spawnSync('clang-12', args);
   } catch(error) {
     const execution_error = {
@@ -86,9 +85,10 @@ app.post('/compile', async (req, res, next) => {
     next();
   }
 
+  buf = fs.readFileSync('/tmp/out');
   // send base64 encoded object file back to user
   res.status(200).json({
-    'data': Buffer.from(compile_result.stdout).toString('base64'),
+    'data': buf.toString('base64'),
     'stderr': compile_result.stderr.toString(),
     'status': compile_result.status
   });

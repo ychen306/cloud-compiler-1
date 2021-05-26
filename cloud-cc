@@ -59,12 +59,15 @@ with tempfile.TemporaryDirectory() as tmpdir:
     asyncio.run(run_coroutines(
         cloud_compile.compile(key_to_obj(k), k, ' '.join(opt_args))
         for k in keys))
-    print('Finished Backend Compiling', file=sys.stderr)
+    #print('Finished Backend Compiling', file=sys.stderr)
 
     # link the result
-    link_args = ['ld', '-r']
-    link_args.extend(map(key_to_obj, keys))
-    link_args.extend(['-o', parsed.output])
-    subprocess.call(link_args)
+    if len(keys) > 1:
+      link_args = ['ld', '-r']
+      link_args.extend(map(key_to_obj, keys))
+      link_args.extend(['-o', parsed.output])
+      subprocess.call(link_args)
+    else:
+      subprocess.call(['mv', key_to_obj(keys[0]), parsed.output])
 
-    print('Linked Chunks', file=sys.stderr)
+    #print('Linked Chunks', file=sys.stderr)

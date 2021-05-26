@@ -15,7 +15,6 @@ lambda_compile_url = base_lambda_url + "compile/"
 def log(*args):
     print(*args, file=sys.stderr)
 
-
 def split(data, clang_cmd, chunks=1, compressed=True):
     # get the presigned upload url
     resp = requests.get(lambda_upload_url)
@@ -37,7 +36,6 @@ def split(data, clang_cmd, chunks=1, compressed=True):
     if resp.status_code != 200:
       log('!!! error spliting', resp.text)
     body = resp.json()
-    print(body)
     if resp.status_code == 200:
         return body['s3_keys']
     else:
@@ -62,22 +60,19 @@ async def compile(output_path, s3_key, clang_cmd):
 
             body = await resp.json()
             if resp.status == 200:
-
-                if 'stderr' in body:
-                    log("Compiler Stderr: ", body['stderr'])
-                    log("Compiler Status: ", body['status'])
-
+                bytes = base64.b64decode(body['data'])
                 if output_path == '-':
-                    sys.stdout.buffer.write(base64.b64decode(body['data']))
+                    sys.stdout.buffer.write(bytes)
                     sys.stdout.flush()
                 else:
                     with open(output_path, 'wb') as fd:
-                        fd.write(base64.b64decode(body['data']))
+                        fd.write(bytes)
 
                 # exit with same status code as splitter
                 # sys.exit(body['status'])
 
             else:
+                body = json.loads(body.decode('utf8'))
                 if 'message' in body: # check for error messages from AWS
                     log("Lambda message: " + body['message'])
 
