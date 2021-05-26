@@ -60,7 +60,7 @@ provider:
 
 functions:
   compile:
-    image: 011533361443.dkr.ecr.us-east-1.amazonaws.com/cloud-compile@sha256:8ed2b4dde2b66dac84b0372c02bf84ee82a09cd2de6be9c5bd0632da70fdf330
+    image: 011533361443.dkr.ecr.us-east-1.amazonaws.com/cloud-compile@sha256:950eece2f709531a1bb6e7b9992b82ba1aa5008f0ff7547181aff743c1e997d8
     events:
         - http:
             path: / 

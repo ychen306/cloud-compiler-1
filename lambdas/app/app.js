@@ -22,6 +22,26 @@ const streamToFile = (input_stream, file_path) => {
   });
 };
 
+app.get('/upload', async (req, res, next) => {
+  try {
+    const key = uuid.v4();
+    const url = S3.getSignedUrl('putObject', {
+      Bucket: 'cloud-compile',
+      Key: key,
+    });
+    res.status(200).json({
+      'url': url,
+      'key': key
+    });
+  } catch (error) {
+    res.status(500).json({
+      'message': 'Error getting presigned put-obj url' + JSON.stringify(error)
+    });
+  }
+
+  next();
+});
+
 // compile split files
 app.post('/compile', async (req, res, next) => {
   const s3_key = req.body.s3_key;
@@ -85,24 +105,19 @@ app.post('/compile', async (req, res, next) => {
 
 // split input into multiple files
 app.post('/split', async (req, res, next) => {
-  var data = Buffer.from(req.body.data, 'base64');
   const chunks = req.body.chunks;
-  const compressed = req.body.compressed;
   const clang_cmd = req.body.clang_cmd;
+  const key = req.body.key
 
-  // write uploaded file to disk
   try {
-    if(compressed) {
-      data = zlib.inflateSync(data);
-    }
-
-    fs.writeFileSync('/tmp/upload', data);
+    const s3_stream = S3.getObject({Bucket: 'cloud-compile', Key: key}).createReadStream();
+    await streamToFile(s3_stream, '/tmp/upload');
     child_process.execSync(`clang-12 ${clang_cmd} /tmp/upload -o /tmp/in`)
   } catch(error) {
-    console.error("Error writing data to lambda disk: ", error);
+    console.error("Error fetching file from S3 bucket: ", error);
     res.status(500).json({
-      'type': 'write_file',
-      'message': "Error writing data to lambda disk."
+      'type': 's3_read',
+      'message': "Error fetching file from S3 bucket.",
     });
     next();
   }
@@ -152,7 +167,6 @@ app.post('/split', async (req, res, next) => {
     console.error("Error uploading split files to s3 bucket: ", error);
     res.status(500).json({
       'type': 's3_write',
-      'extra': JSON.stringify(error),
       'message': "Error uploading split files to s3 bucket."
     });
     next();

@@ -8,6 +8,7 @@ import argparse
 import requests
 
 base_lambda_url = "https://mwqk8dbp1f.execute-api.us-east-1.amazonaws.com/dev/"
+lambda_upload_url = base_lambda_url + 'upload/'
 lambda_split_url = base_lambda_url + "split/" 
 lambda_compile_url = base_lambda_url + "compile/"
 
@@ -16,19 +17,22 @@ def log(*args):
 
 
 def split(data, clang_cmd, chunks=1, compressed=True):
-    if compressed:
-        data = zlib.compress(data, 9)
-    
-    log(len(data))
-    data = base64.b64encode(data).decode('utf8')
+    # get the presigned upload url
+    resp = requests.get(lambda_upload_url)
+    assert resp.status_code == 200
+    body = resp.json()
+    obj_key = body['key']
 
+    # do the actual upload
+    resp = requests.put(body['url'], data=data)
+    assert resp.status_code == 200
+
+    # request frontend+split on the obj
     payload = {
-        'compressed': compressed,
-        'data': data,
+        'key': obj_key,
         'chunks': chunks,
         'clang_cmd': clang_cmd
     }
-
     resp = requests.post(lambda_split_url, json=payload)
     if resp.status_code != 200:
       log('!!! error spliting', resp.text)
