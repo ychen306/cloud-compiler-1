@@ -53,7 +53,7 @@ async def run_coroutines(coros):
 
  # This needs repeated for each object ID outputtted from frontend 
 with tempfile.TemporaryDirectory() as tmpdir:
-    key_to_obj = lambda k: tmpdir + '/' + f'{k}.o'
+    key_to_obj = lambda k: os.path.join(tmpdir, f'{k}.o')
     # Pass output of the preprocessing process to the compiling process
     opt_args = kept_args[:-1] + ['-x', 'ir', '-emit-obj']
 

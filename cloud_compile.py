@@ -2,7 +2,7 @@
 
 import asyncio
 import aiohttp
-import sys, os, base64, uuid
+import sys, os
 import zlib
 import argparse
 import requests
@@ -11,6 +11,8 @@ base_lambda_url = "https://mwqk8dbp1f.execute-api.us-east-1.amazonaws.com/dev/"
 lambda_upload_url = base_lambda_url + 'upload/'
 lambda_split_url = base_lambda_url + "split/" 
 lambda_compile_url = base_lambda_url + "compile/"
+
+chunk_size = 64 * 1024
 
 def log(*args):
     print(*args, file=sys.stderr)
@@ -23,7 +25,7 @@ def split(data, clang_cmd, chunks=1, compressed=True):
     obj_key = body['key']
 
     # do the actual upload
-    resp = requests.put(body['url'], data=data)
+    resp = requests.put(body['url'], data=zlib.compress(data))
     assert resp.status_code == 200
 
     # request frontend+split on the obj
@@ -32,15 +34,19 @@ def split(data, clang_cmd, chunks=1, compressed=True):
         'chunks': chunks,
         'clang_cmd': clang_cmd
     }
+
     resp = requests.post(lambda_split_url, json=payload)
+
     if resp.status_code != 200:
       log('!!! error spliting', resp.text)
+
     body = resp.json()
     if resp.status_code == 200:
         return body['s3_keys']
     else:
         if 'message' in body: # check for error messages from AWS
             log("Lambda message: " + body['message'])
+
         # load second level body
         log('Splitter Error: ', str(body))
 
@@ -57,22 +63,24 @@ async def compile(output_path, s3_key, clang_cmd):
     async with aiohttp.ClientSession() as session:
         async with session.post(lambda_compile_url,
                     json=payload) as resp:
-
-            body = await resp.json()
+                    
+            # deflate encoding automatically decoded by aiohttp
             if resp.status == 200:
-                bytes = base64.b64decode(body['data'])
-                if output_path == '-':
-                    sys.stdout.buffer.write(bytes)
-                    sys.stdout.flush()
+                if output_path == "-":
+                    while True:
+                        chunk = await resp.content.read(chunk_size)
+                        if not chunk:
+                            break
+                        sys.stdout.buffer.write(chunk)
                 else:
                     with open(output_path, 'wb') as fd:
-                        fd.write(bytes)
-
-                # exit with same status code as splitter
-                # sys.exit(body['status'])
-
+                        while True:
+                            chunk = await resp.content.read(chunk_size)
+                            if not chunk:
+                                break
+                            fd.write(chunk)
             else:
-                body = json.loads(body.decode('utf8'))
+                body = await resp.json() 
                 if 'message' in body: # check for error messages from AWS
                     log("Lambda message: " + body['message'])
 

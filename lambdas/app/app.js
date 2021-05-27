@@ -16,6 +16,7 @@ const streamToFile = (input_stream, file_path) => {
   return new Promise((resolve, reject) => {
     const file_write_stream = fs.createWriteStream(file_path)
     input_stream
+      .pipe(zlib.createInflate()) // decompress
       .pipe(file_write_stream)
       .on('finish', resolve)
       .on('error', reject)
@@ -37,7 +38,6 @@ app.get('/upload', async (req, res, next) => {
     res.status(500).json({
       'message': 'Error getting presigned put-obj url' + JSON.stringify(error)
     });
-    next();
   }
 });
 
@@ -85,13 +85,9 @@ app.post('/compile', async (req, res, next) => {
     next();
   }
 
-  buf = fs.readFileSync('/tmp/out');
-  // send base64 encoded object file back to user
-  res.status(200).json({
-    'data': buf.toString('base64'),
-    'stderr': compile_result.stderr.toString(),
-    'status': compile_result.status
-  });
+  buf = zlib.deflateSync(fs.readFileSync('/tmp/out'));
+  // send deflate encoded object file back to user
+  res.status(200).send(buf);
 
   // remove file from S3 after it has been compiled and sent back to user
   S3.deleteObject(params, (err, data) => {
@@ -109,10 +105,14 @@ app.post('/split', async (req, res, next) => {
   const clang_cmd = req.body.clang_cmd;
   const key = req.body.key
 
+  var frontend_result;
   try {
     const s3_stream = S3.getObject({Bucket: 'cloud-compile', Key: key}).createReadStream();
     await streamToFile(s3_stream, '/tmp/upload');
-    child_process.execSync(`clang-12 ${clang_cmd} /tmp/upload -o /tmp/in`)
+
+    var args = clang_cmd.split(' ');
+    args.push('/tmp/upload', '-o', '/tmp/in');
+    frontend_result = child_process.spawnSync('clang-12', args);
   } catch(error) {
     console.error("Error fetching file from S3 bucket: ", error);
     res.status(500).json({
@@ -175,9 +175,12 @@ app.post('/split', async (req, res, next) => {
   // send keys for each split file back to user
   res.status(200).json({
     's3_keys': s3_keys,
-    'stdout': split_result.stdout,
-    'stderr': split_result.stderr,
-    'status': split_result.status
+    'split_stdout': split_result.stdout,
+    'split_stderr': split_result.stderr,
+    'split_status': split_result.status,
+    'frontend_stdout': frontend_result.stdout,
+    'frontend_stdout': frontend_result.stderr,
+    'frontend_stdout': frontend_result.status
   });
 });
 
