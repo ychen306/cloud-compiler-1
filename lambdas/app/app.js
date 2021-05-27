@@ -128,7 +128,7 @@ app.post('/split', async (req, res, next) => {
   try {
     fs.mkdirSync(`/tmp/${temp_dir}/`);
     
-    split_result = child_process.spawnSync('split', [`-j${chunks}`, '/tmp/in', '-o', `/tmp/${temp_dir}/`]);
+    split_result = child_process.spawnSync('split', ['/tmp/in', '-o', `/tmp/${temp_dir}/`, '-preserve-locals']);
   } catch(error) {
     console.error("Error splitting files: ", error);
     res.status(500).json({

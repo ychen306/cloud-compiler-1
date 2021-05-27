@@ -41,11 +41,12 @@ parsed, kept_args = parser.parse_known_args()
 # TODO: be more comprehensive (e.g., support foo.ll)
 language = 'cpp-output' if parsed.x == 'c' else 'c++-cpp-output'
 
-chunks = 8 # Number of chunks to split file into
+chunks = 4 # Number of chunks to split file into
 
 # run the lambda to call frontend and get raw bitcode, then split
 frontend_args = kept_args[:-1] + ['-emit-llvm-bc', '-disable-llvm-passes', '-x',  language]
 keys = cloud_compile.split(preprocess.stdout.read(), clang_cmd=' '.join(frontend_args), chunks=chunks)
+print('!!!1 num keys', len(keys))
 
 async def run_coroutines(coros):
     await asyncio.gather(*coros)
@@ -56,10 +57,11 @@ with tempfile.TemporaryDirectory() as tmpdir:
     # Pass output of the preprocessing process to the compiling process
     opt_args = kept_args[:-1] + ['-x', 'ir', '-emit-obj']
 
+    print('Starint compiling')
     asyncio.run(run_coroutines(
         cloud_compile.compile(key_to_obj(k), k, ' '.join(opt_args))
         for k in keys))
-    #print('Finished Backend Compiling', file=sys.stderr)
+    print('Finished Backend Compiling', file=sys.stderr)
 
     # link the result
     if len(keys) > 1:
@@ -70,4 +72,4 @@ with tempfile.TemporaryDirectory() as tmpdir:
     else:
       subprocess.call(['mv', key_to_obj(keys[0]), parsed.output])
 
-    #print('Linked Chunks', file=sys.stderr)
+    print('Linked Chunks', file=sys.stderr)

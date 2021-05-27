@@ -222,9 +222,12 @@ static bool isInPartition(const GlobalValue *GV, unsigned I, unsigned N) {
 }
 
 static void
-split(std::unique_ptr<Module> M, unsigned N,
+split(std::unique_ptr<Module> M, 
       function_ref<void(std::unique_ptr<Module> MPart)> ModuleCallback,
       bool PreserveLocals) {
+  unsigned N = M->getInstructionCount() / 10000;
+  if (N == 0)
+    N = 1;
   if (!PreserveLocals) {
     for (Function &F : *M)
       externalize(&F);
@@ -269,9 +272,6 @@ static cl::opt<std::string> OutputFilename("o",
                                            cl::desc("Override output filename"),
                                            cl::value_desc("filename"));
 
-static cl::opt<unsigned> NumOutputs("j", cl::Prefix, cl::init(2),
-                                    cl::desc("Number of output files"));
-
 static cl::opt<bool>
     PreserveLocals("preserve-locals", cl::Prefix, cl::init(false),
                    cl::desc("Split without externalizing locals"));
@@ -290,7 +290,7 @@ int main(int argc, char **argv) {
 
   unsigned I = 0;
   split(
-      std::move(M), NumOutputs,
+      std::move(M), 
       [&](std::unique_ptr<Module> MPart) {
         std::error_code EC;
         std::unique_ptr<ToolOutputFile> Out(new ToolOutputFile(
