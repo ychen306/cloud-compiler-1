@@ -37,8 +37,7 @@ RUN apt-get update && \
     wget https://apt.llvm.org/llvm.sh && \
     chmod +x llvm.sh && \
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
-    ./llvm.sh 12 \ 
-    cmake
+    ./llvm.sh 12
 
 # Install the custom splitter
 ADD ./split/CMakeLists.txt ./split/split.cpp /split/

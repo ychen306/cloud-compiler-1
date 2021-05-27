@@ -15,6 +15,7 @@ service: app
 
 plugins:
   - serverless-iam-roles-per-function
+
 # app and org for use with dashboard.serverless.com
 #app: your-app-name
 #org: your-org-name
@@ -60,7 +61,7 @@ provider:
 
 functions:
   compile:
-    image: 011533361443.dkr.ecr.us-east-1.amazonaws.com/cloud-compile@sha256:617fa63d293346498917100539638c5bf7515589d0f5c2efd29f85f188a19128
+    image: 011533361443.dkr.ecr.us-east-1.amazonaws.com/cloud-compile@sha256:05395464c06f05aca8ecbfd7eb74c5fb53a57b731261f6ee3e5c8a9577330a6c
     events:
         - http:
             path: / 

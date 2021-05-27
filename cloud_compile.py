@@ -6,6 +6,7 @@ import sys, os
 import zlib
 import argparse
 import requests
+import base64
 
 base_lambda_url = "https://mwqk8dbp1f.execute-api.us-east-1.amazonaws.com/dev/"
 lambda_upload_url = base_lambda_url + 'upload/'
@@ -66,19 +67,9 @@ async def compile(output_path, s3_key, clang_cmd):
                     
             # deflate encoding automatically decoded by aiohttp
             if resp.status == 200:
-                if output_path == "-":
-                    while True:
-                        chunk = await resp.content.read(chunk_size)
-                        if not chunk:
-                            break
-                        sys.stdout.buffer.write(chunk)
-                else:
-                    with open(output_path, 'wb') as fd:
-                        while True:
-                            chunk = await resp.content.read(chunk_size)
-                            if not chunk:
-                                break
-                            fd.write(chunk)
+                bytes = await resp.content.read()
+                with open(output_path, 'wb') as fd:
+                    fd.write(base64.decodebytes(bytes))
             else:
                 body = await resp.json() 
                 if 'message' in body: # check for error messages from AWS

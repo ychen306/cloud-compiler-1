@@ -12,11 +12,11 @@ app.use(express.json());
 const S3 = new AWS.S3();
 
 // allows for async/await implementation of streams
-const streamToFile = (input_stream, file_path) => {
+const streamToFile = (input_stream, file_path, decompress) => {
   return new Promise((resolve, reject) => {
-    const file_write_stream = fs.createWriteStream(file_path)
+    const file_write_stream = fs.createWriteStream(file_path);
+    if (decompress) input_stream = input_stream.pipe(zlib.createInflate());
     input_stream
-      .pipe(zlib.createInflate()) // decompress
       .pipe(file_write_stream)
       .on('finish', resolve)
       .on('error', reject)
@@ -55,7 +55,7 @@ app.post('/compile', async (req, res, next) => {
   // get split file from s3 and write it to /tmp/in
   try {
     const s3_stream = S3.getObject(params).createReadStream();
-    await streamToFile(s3_stream, '/tmp/in');
+    await streamToFile(s3_stream, '/tmp/in', false);
   } catch(error) {
     console.error("Error fetching file from S3 bucket: ", error);
     res.status(500).json({
@@ -85,9 +85,9 @@ app.post('/compile', async (req, res, next) => {
     next();
   }
 
-  buf = zlib.deflateSync(fs.readFileSync('/tmp/out'));
-  // send deflate encoded object file back to user
-  res.status(200).send(buf);
+  buf = fs.readFileSync('/tmp/out');
+  res.setHeader('content-type', 'text/plain');
+  res.status(200).send(buf.toString('base64'));
 
   // remove file from S3 after it has been compiled and sent back to user
   S3.deleteObject(params, (err, data) => {
@@ -108,7 +108,7 @@ app.post('/split', async (req, res, next) => {
   var frontend_result;
   try {
     const s3_stream = S3.getObject({Bucket: 'cloud-compile', Key: key}).createReadStream();
-    await streamToFile(s3_stream, '/tmp/upload');
+    await streamToFile(s3_stream, '/tmp/upload', true /* decompress */);
 
     var args = clang_cmd.split(' ');
     args.push('/tmp/upload', '-o', '/tmp/in');
